@@ -73,16 +73,18 @@ app.get('/get-leads', async (req, res) => {
       const rows = await sheet.getRows();
   
       // Use the headerValues from the sheet to build each lead object.
-      const leads = rows.map(row => {
-        let lead = {};
+      // const leads = rows.map(row => {
+        let lead = [];
         // For each header, get the corresponding value from the row.
-        sheet.headerValues.forEach(header => {
-          lead[header] = row[header];
+        rows.forEach(item => {
+          // lead[item] = row[header];
+          lead.push(item._rawData);
+          console.log("logging rows  - ", item)
         });
-        return lead;
-      });
+        // return lead;
+      // });
   
-      res.status(200).json(leads);
+      res.status(200).json(lead);
     } catch (error) {
       console.error(error);
       res.status(500).json({ error: 'Failed to fetch leads' });
