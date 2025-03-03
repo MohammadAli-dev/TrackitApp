@@ -1,53 +1,88 @@
 import React, { useEffect, useState } from "react";
-import Card from "./components/Card";
-import CardContent from "./components/CardContent";
 import axios from "axios";
 import BaseURL from "./config";
 
 const App = () => {
+  // State for fetched lead records
   const [data, setData] = useState([]);
+  // Toggle for showing/hiding the add lead form
   const [showForm, setShowForm] = useState(false);
-  const REACT_NATIVE_NODE_ENVIRONMENT = "development";
-
-  // Using camelCase keys for the formData state
+  // State for add lead form; using camelCase keys
   const [formData, setFormData] = useState({
     businessName: "",
     contactPerson: "",
     phone: "",
     address: "",
-    location: "", // This will be auto-populated with lat,long
+    location: "",
     comments: ""
   });
+  // State for filter inputs (one per column)
+  const [filters, setFilters] = useState({
+    businessName: "",
+    contactPerson: "",
+    phone: "",
+    address: "",
+    location: "",
+    comments: "",
+    date: ""
+  });
 
-  // Fetch existing leads from backend on component mount
+  // Fetch leads from the backend when component mounts
   const getHandler = async () => {
     try {
       const resp = await axios.get(
-        `${BaseURL[REACT_NATIVE_NODE_ENVIRONMENT].authServer}get-leads`
+        `${BaseURL.development.authServer}get-leads`
       );
       setData(resp.data);
-    } catch (exception) {
-      console.log(exception);
+    } catch (error) {
+      console.log(error);
     }
   };
 
-  // Post a new lead with the current formData (including auto-fetched location)
+  useEffect(() => {
+    getHandler();
+  }, []);
+
+  // Automatically fetch location when form is shown
+  useEffect(() => {
+    if (showForm && navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          const { latitude, longitude } = position.coords;
+          setFormData((prevData) => ({
+            ...prevData,
+            location: `${latitude},${longitude}`
+          }));
+        },
+        (error) => {
+          console.error("Error fetching location: ", error);
+        }
+      );
+    }
+  }, [showForm]);
+
+  // Handle changes in the add lead form inputs
+  const handleFormChange = (e) => {
+    setFormData({ ...formData, [e.target.name]: e.target.value });
+  };
+
+  // Handle submission of the add lead form
   const postHandler = async (e) => {
     e.preventDefault();
     const payload = JSON.stringify(formData);
     const config = {
       method: "post",
       maxBodyLength: Infinity,
-      url: `${BaseURL[REACT_NATIVE_NODE_ENVIRONMENT].authServer}add-lead`,
+      url: `${BaseURL.development.authServer}add-lead`,
       headers: { "Content-Type": "application/json" },
       data: payload
     };
 
     try {
       await axios.request(config);
-      // Append the new lead locally (adding a date field for display)
+      // Append new lead locally, adding a date field for display
       setData([...data, { ...formData, date: new Date().toLocaleString() }]);
-      // Reset form values
+      // Reset form data
       setFormData({
         businessName: "",
         contactPerson: "",
@@ -62,43 +97,42 @@ const App = () => {
     }
   };
 
-  useEffect(() => {
-    getHandler();
-  }, []);
-
-  // When the form is shown, attempt to get the current location
-  useEffect(() => {
-    if (showForm && navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          const { latitude, longitude } = position.coords;
-          // Update formData with the fetched location in "lat,long" format
-          setFormData((prevData) => ({
-            ...prevData,
-            location: `${latitude},${longitude}`
-          }));
-        },
-        (error) => {
-          console.error("Error fetching location: ", error);
-          // You might want to display a message or set a default location here
-        }
-      );
-    }
-  }, [showForm]);
-
-  const handleChange = (e) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
+  // Handle changes in the filter inputs for the table
+  const handleFilterChange = (e) => {
+    setFilters({ ...filters, [e.target.name]: e.target.value });
   };
+
+  // Helper: Given a lead and key, return the value (trying both camelCase and PascalCase)
+  const getValue = (lead, key) => {
+    return (
+      lead[key] ||
+      lead[key.charAt(0).toUpperCase() + key.slice(1)] ||
+      ""
+    ).toString();
+  };
+
+  // Filter the data based on each filter input
+  const filteredData = data.filter((lead) =>
+    Object.keys(filters).every((key) => {
+      const filterVal = filters[key].toLowerCase().trim();
+      const leadVal = getValue(lead, key).toLowerCase();
+      if (!filterVal) return true;
+      // Check if the value includes the filter text
+      return leadVal.includes(filterVal);
+    })
+  );
 
   return (
     <div style={{ padding: "20px" }}>
+      {/* Add Lead Button */}
       <button
         onClick={() => setShowForm(!showForm)}
         style={{ marginBottom: "20px", padding: "10px", fontSize: "16px" }}
       >
         {showForm ? "Hide Form" : "Add New Lead"}
       </button>
-
+  
+      {/* Add Lead Form */}
       {showForm && (
         <form
           onSubmit={postHandler}
@@ -114,7 +148,7 @@ const App = () => {
             name="businessName"
             placeholder="Business Name"
             value={formData.businessName}
-            onChange={handleChange}
+            onChange={handleFormChange}
             required
           />
           <input
@@ -122,7 +156,7 @@ const App = () => {
             name="contactPerson"
             placeholder="Contact Person"
             value={formData.contactPerson}
-            onChange={handleChange}
+            onChange={handleFormChange}
             required
           />
           <input
@@ -130,7 +164,7 @@ const App = () => {
             name="phone"
             placeholder="Phone"
             value={formData.phone}
-            onChange={handleChange}
+            onChange={handleFormChange}
             required
           />
           <input
@@ -138,16 +172,15 @@ const App = () => {
             name="address"
             placeholder="Address"
             value={formData.address}
-            onChange={handleChange}
+            onChange={handleFormChange}
             required
           />
-          {/* The location field is now auto-filled */}
           <input
             type="text"
             name="location"
             placeholder="Location (lat,long)"
             value={formData.location}
-            onChange={handleChange}
+            onChange={handleFormChange}
             required
           />
           <input
@@ -155,38 +188,114 @@ const App = () => {
             name="comments"
             placeholder="Comments"
             value={formData.comments}
-            onChange={handleChange}
+            onChange={handleFormChange}
           />
           <button type="submit">Add Entry</button>
         </form>
       )}
-
-      <div
-        style={{
-          padding: "20px",
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))",
-          gap: "20px"
-        }}
-      >
-        {data.map((lead, index) => (
-          <Card key={index}>
-            <CardContent
-              title={lead.businessName || lead.BusinessName}
-              details={[
-                { label: "Contact", value: lead.contactPerson || lead.ContactPerson },
-                { label: "Phone", value: lead.phone || lead.Phone },
-                { label: "Address", value: lead.address || lead.Address },
-                { label: "Location", value: lead.location || lead.Location },
-                { label: "Comments", value: lead.comments || lead.Comments },
-                { label: "Date", value: lead.date || lead.Date }
-              ]}
-            />
-          </Card>
-        ))}
+  
+      {/* Table container with horizontal scrolling */}
+      <div style={{ overflowX: "auto", marginTop: "20px" }}>
+        <table
+          border="1"
+          cellPadding="5"
+          cellSpacing="0"
+          style={{ width: "100%", borderCollapse: "collapse" }}
+        >
+          <thead>
+            <tr>
+              <th>Business Name</th>
+              <th>Contact Person</th>
+              <th>Phone</th>
+              <th>Address</th>
+              <th>Location</th>
+              <th>Comments</th>
+              <th>Date</th>
+            </tr>
+            {/* Filter row */}
+            <tr>
+              <th>
+                <input
+                  type="text"
+                  name="businessName"
+                  value={filters.businessName}
+                  onChange={handleFilterChange}
+                  placeholder="Filter"
+                />
+              </th>
+              <th>
+                <input
+                  type="text"
+                  name="contactPerson"
+                  value={filters.contactPerson}
+                  onChange={handleFilterChange}
+                  placeholder="Filter"
+                />
+              </th>
+              <th>
+                <input
+                  type="text"
+                  name="phone"
+                  value={filters.phone}
+                  onChange={handleFilterChange}
+                  placeholder="Filter"
+                />
+              </th>
+              <th>
+                <input
+                  type="text"
+                  name="address"
+                  value={filters.address}
+                  onChange={handleFilterChange}
+                  placeholder="Filter"
+                />
+              </th>
+              <th>
+                <input
+                  type="text"
+                  name="location"
+                  value={filters.location}
+                  onChange={handleFilterChange}
+                  placeholder="Filter"
+                />
+              </th>
+              <th>
+                <input
+                  type="text"
+                  name="comments"
+                  value={filters.comments}
+                  onChange={handleFilterChange}
+                  placeholder="Filter"
+                />
+              </th>
+              <th>
+                <input
+                  type="text"
+                  name="date"
+                  value={filters.date}
+                  onChange={handleFilterChange}
+                  placeholder="Filter"
+                />
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {filteredData.map((lead, index) => (
+              <tr key={index}>
+                <td>{getValue(lead, "businessName")}</td>
+                <td>{getValue(lead, "contactPerson")}</td>
+                <td>{getValue(lead, "phone")}</td>
+                <td>{getValue(lead, "address")}</td>
+                <td>{getValue(lead, "location")}</td>
+                <td>{getValue(lead, "comments")}</td>
+                <td>{getValue(lead, "date")}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
     </div>
-  );
+  );  
 };
 
 export default App;
