@@ -9,17 +9,17 @@ const App = () => {
   const [showForm, setShowForm] = useState(false);
   const REACT_NATIVE_NODE_ENVIRONMENT = "development";
 
-  // Updated state: using camelCase keys
+  // Using camelCase keys for the formData state
   const [formData, setFormData] = useState({
     businessName: "",
     contactPerson: "",
     phone: "",
     address: "",
-    location: "",
+    location: "", // This will be auto-populated with lat,long
     comments: ""
   });
 
-  // Fetch existing leads from backend
+  // Fetch existing leads from backend on component mount
   const getHandler = async () => {
     try {
       const resp = await axios.get(
@@ -31,7 +31,7 @@ const App = () => {
     }
   };
 
-  // Post a new lead; now payload uses camelCase keys
+  // Post a new lead with the current formData (including auto-fetched location)
   const postHandler = async (e) => {
     e.preventDefault();
     const payload = JSON.stringify(formData);
@@ -45,7 +45,7 @@ const App = () => {
 
     try {
       await axios.request(config);
-      // Append the new lead locally (add a date field for display)
+      // Append the new lead locally (adding a date field for display)
       setData([...data, { ...formData, date: new Date().toLocaleString() }]);
       // Reset form values
       setFormData({
@@ -65,6 +65,26 @@ const App = () => {
   useEffect(() => {
     getHandler();
   }, []);
+
+  // When the form is shown, attempt to get the current location
+  useEffect(() => {
+    if (showForm && navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          const { latitude, longitude } = position.coords;
+          // Update formData with the fetched location in "lat,long" format
+          setFormData((prevData) => ({
+            ...prevData,
+            location: `${latitude},${longitude}`
+          }));
+        },
+        (error) => {
+          console.error("Error fetching location: ", error);
+          // You might want to display a message or set a default location here
+        }
+      );
+    }
+  }, [showForm]);
 
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -121,10 +141,11 @@ const App = () => {
             onChange={handleChange}
             required
           />
+          {/* The location field is now auto-filled */}
           <input
             type="text"
             name="location"
-            placeholder="Location"
+            placeholder="Location (lat,long)"
             value={formData.location}
             onChange={handleChange}
             required
